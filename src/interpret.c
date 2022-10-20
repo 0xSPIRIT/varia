@@ -124,7 +124,8 @@ program_find_function(struct Program *program, const char *name) {
     return NULL;
 }
 
-void set_variable_from_str(void *ptr, char *str, enum Type type) {
+void
+set_variable_from_str(void *ptr, char *str, enum Type type) {
     switch (type) {
     case TYPE_STRING:
         strcpy((char*)ptr, str);
@@ -167,7 +168,8 @@ void set_variable_from_str(void *ptr, char *str, enum Type type) {
     }
 }
 
-void handle_variable(struct Interpreter *interp, struct Token **tok) {
+void
+handle_variable(struct Interpreter *interp, struct Token **tok) {
     struct Token *tok_variable_name = *tok;
 
     if ((*tok)->next->type == TOKEN_COLON) {

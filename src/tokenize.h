@@ -21,7 +21,7 @@ enum Token_Type {
 enum Identifier_Type {
     IDENTIFIER_NONE,
     IDENTIFIER_VARIABLE_OR_TYPE,
-    IDENTIFIER_KEYWORD,  // eg: the struct in  "Vector :: struct {"
+    IDENTIFIER_KEYWORD,      // eg: the struct in  "Vector :: struct {"
     IDENTIFIER_FUNCTION_DEF, // eg: the main in    "main :: () {"
     IDENTIFIER_FUNCTION_CALL,
     IDENTIFIER_STRUCT_DEF,   // eg: the Vector in  "Vector :: struct {"
