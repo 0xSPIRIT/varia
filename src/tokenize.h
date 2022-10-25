@@ -15,7 +15,7 @@ enum Token_Type {
     TOKEN_COMMA = ',',
     TOKEN_CLOSE_FUNCTION = ')',
     TOKEN_OPEN_SCOPE = '{',
-    TOKEN_CLOSE_SCOPE = '}'
+    TOKEN_CLOSE_SCOPE = '}',
 };
 
 enum Identifier_Type {
@@ -28,6 +28,8 @@ enum Identifier_Type {
 };
 
 struct Token {
+    int line; // Line in source code file.
+    
     enum Token_Type type;
     enum Identifier_Type identifier_type;
     char name[MAX_TOKEN_LENGTH];
@@ -36,7 +38,10 @@ struct Token {
 };
 
 struct Tokenizer {
+    char file_name[256];
     char *buffer; // The actual source file.
+    
+    int current_line;
 
     struct Token *token_start, *token_curr;
     unsigned token_count;

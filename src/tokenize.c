@@ -1,12 +1,11 @@
 void
-token_new(
-    struct Tokenizer *tokenizer,
-    enum Token_Type type,
-    char data[MAX_TOKEN_LENGTH]
-) {
+token_new(struct Tokenizer *tokenizer,
+          enum Token_Type type,
+          char data[MAX_TOKEN_LENGTH]) {
     struct Token *token = calloc(1, sizeof(struct Token));
 
     token->type = type;
+    token->line = tokenizer->current_line;
     memcpy(token->name, data, strlen(data));
 
     if (!tokenizer->token_start) {
@@ -15,7 +14,7 @@ token_new(
         token->prev = tokenizer->token_curr;
         tokenizer->token_curr->next = token;
     }
-    
+
     tokenizer->token_curr = token;
 
     tokenizer->token_count++;
@@ -24,11 +23,11 @@ token_new(
 bool
 is_special_char(char c) {
     switch (c) {
-    case TOKEN_COLON: case TOKEN_EQUAL: case TOKEN_ADD:
-    case TOKEN_SUBTRACT: case TOKEN_END_STATEMENT:
-    case TOKEN_OPEN_FUNCTION: case TOKEN_CLOSE_FUNCTION:
-    case TOKEN_OPEN_SCOPE: case TOKEN_CLOSE_SCOPE:
-    case TOKEN_COMMA:
+        case TOKEN_COLON: case TOKEN_EQUAL: case TOKEN_ADD:
+        case TOKEN_SUBTRACT: case TOKEN_END_STATEMENT:
+        case TOKEN_OPEN_FUNCTION: case TOKEN_CLOSE_FUNCTION:
+        case TOKEN_OPEN_SCOPE: case TOKEN_CLOSE_SCOPE:
+        case TOKEN_COMMA: case '"':
         return true;
     }
     return false;
@@ -57,7 +56,7 @@ is_literal_char(char c) {
 bool
 is_whitespace(char c) {
     switch (c) {
-    case '\n': case '\r': case ' ': case '\t':
+        case '\n': case '\r': case ' ': case '\t':
         return true;
     }
     return false;
@@ -69,7 +68,7 @@ is_function_def(struct Token *token) {
     Assert(token);
     if (!token->next || !token->next->next || !token->next->next->next) return false;
     if (token->type != TOKEN_IDENTIFIER) return false;
-    
+
     if (token->next->type == TOKEN_COLON &&
         token->next->next->type == TOKEN_COLON &&
         token->next->next->next->type == TOKEN_OPEN_FUNCTION)
@@ -107,10 +106,12 @@ is_struct_name(struct Token *token) {
 }
 
 struct Tokenizer
-tokenize(char *source_buffer) {
+tokenize(const char *file_name, char *source_buffer) {
     struct Tokenizer tokenizer = {0};
-
+    
+    strcpy(tokenizer.file_name, file_name);
     tokenizer.buffer = source_buffer;
+    tokenizer.current_line = 1;
 
     char *s = tokenizer.buffer;
 
@@ -121,7 +122,20 @@ tokenize(char *source_buffer) {
     bool string = false; // Are we in a string?
 
     while (*s) {
+        if (*s == '/' && *(s+1) == '/') {
+            // Continue till EOL or EOF
+            while (*s) {
+                if (*s == '\r' || *s == '\n') {
+                    break;
+                }
+                ++s;
+            }
+        }
+        
         if (string) {
+            current_token[current_token_len++] = *s;
+            current_token_type = TOKEN_LITERAL;
+
             if (*s == '"') {
                 string = false;
 
@@ -130,13 +144,10 @@ tokenize(char *source_buffer) {
                 token_new(&tokenizer, current_token_type, current_token);
                 memset(current_token, 0, MAX_TOKEN_LENGTH);
                 current_token_len = 0;
-            
+
                 ++s;
                 continue;
             }
-
-            current_token[current_token_len++] = *s;
-            current_token_type = TOKEN_LITERAL;
 
             ++s;
             continue;
@@ -150,7 +161,14 @@ tokenize(char *source_buffer) {
                 current_token_len = 0;
             }
             current_token_type = 0;
-
+            
+            if (*s == '\r' || *s == '\n') {
+                if (*s == '\r' && *(s+1) == '\n') {
+                    ++s; // So only one \r will be tokenized instead of two.
+                }
+                tokenizer.current_line++;
+            }
+            
             ++s;
             continue;
         }
@@ -165,6 +183,8 @@ tokenize(char *source_buffer) {
             }
 
             if (*s == '"') {
+                current_token[current_token_len++] = *s;
+                current_token_type = TOKEN_LITERAL;
                 string = true;
             } else {
                 char data[MAX_TOKEN_LENGTH] = {*s, 0};
@@ -214,11 +234,11 @@ print_tokens(struct Tokenizer *tokenizer) {
 
     for (struct Token *tok = start; tok; tok = tok->next) {
         enum Token_Type type = tok->type;
-        
+
         char name[32] = {0};
         switch (type) {
-        case TOKEN_IDENTIFIER: strcpy(name, "Identifier"); break;
-        case TOKEN_LITERAL: strcpy(name, "Literal"); break;
+            case TOKEN_IDENTIFIER: strcpy(name, "Identifier"); break;
+            case TOKEN_LITERAL: strcpy(name, "Literal"); break;
         }
 
         char identifier_type[256] = {0};
@@ -226,22 +246,22 @@ print_tokens(struct Tokenizer *tokenizer) {
             char str[64] = {0};
 
             switch (tok->identifier_type) {
-            case IDENTIFIER_NONE:
+                case IDENTIFIER_NONE:
                 strcpy(str, "None");
                 break;
-            case IDENTIFIER_KEYWORD:
+                case IDENTIFIER_KEYWORD:
                 strcpy(str, "Keyword");
                 break;
-            case IDENTIFIER_FUNCTION_DEF:
+                case IDENTIFIER_FUNCTION_DEF:
                 strcpy(str, "Function Def");
                 break;
-            case IDENTIFIER_FUNCTION_CALL:
+                case IDENTIFIER_FUNCTION_CALL:
                 strcpy(str, "Function Call");
                 break;
-            case IDENTIFIER_STRUCT_DEF:
+                case IDENTIFIER_STRUCT_DEF:
                 strcpy(str, "Struct Def");
                 break;
-            case IDENTIFIER_VARIABLE_OR_TYPE:
+                case IDENTIFIER_VARIABLE_OR_TYPE:
                 strcpy(str, "Variable / Type");
                 break;
             }

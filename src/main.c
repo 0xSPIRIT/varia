@@ -1,8 +1,9 @@
+#include <windows.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <windows.h>
 
 #include "util.c"
 
@@ -19,11 +20,11 @@ main(int argc, char **argv) {
         // return 1;
         argv[1] = "test.v";
     }
-
+    
     char *source_buffer = read_entire_file(argv[1]);
-    struct Tokenizer tokenizer = tokenize(source_buffer);
+    struct Tokenizer tokenizer = tokenize(argv[1], source_buffer);
     interpret(tokenizer);
     free(source_buffer);
-
+    
     return 0;
 }

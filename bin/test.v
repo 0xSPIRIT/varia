@@ -1,3 +1,10 @@
+// This is a test
+
+//fun :: (a: int, b: int) {
+//	print(a);
+//	print(b);
+//}
+
 main :: () {
-    b: string = "Something else";
+	print("This is a test");
 }
