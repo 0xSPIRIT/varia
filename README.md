@@ -4,6 +4,8 @@ Varia is a C-style interpreted programming language.
 This is a side-project, for times when I'm bored of
 programming my main project (a game).
 
+Example code is located at bin\test.v
+
 It's in no way finished yet, it's still in very
 early stages and there are lots of bugs. For example,
 `return`, and `sum += b` don't work as yet. But,
