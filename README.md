@@ -5,7 +5,10 @@ This is a side-project, for times when I'm bored of
 programming my main project (a game).
 
 It's in no way finished yet, it's still in very
-early stages and there are lots of bugs.
+early stages and there are lots of bugs. For example,
+`return`, and `sum += b` don't work as yet. But,
+the language has function calls & the call stack,
+parameters & calling functions working correctly... So far
 
 Compiler used: MSVC 2022, Editor: 4coder.
 
