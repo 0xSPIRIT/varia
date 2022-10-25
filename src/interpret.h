@@ -4,7 +4,6 @@
 
 enum Type {
     TYPE_U8,
-    TYPE_U64,
     TYPE_S64,
     TYPE_F64,
     TYPE_STRING

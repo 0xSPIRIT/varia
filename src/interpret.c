@@ -32,8 +32,6 @@ get_type(const char *name) {
         result = TYPE_U8;
     } else if (0==strcmp(name, "int") || 0==strcmp(name, "i64")) {
         result = TYPE_S64;
-    } else if (0==strcmp(name, "u64")) {
-        result = TYPE_U64;
     } else if (0==strcmp(name, "float") || 0==strcmp(name, "f64")) {
         result = TYPE_F64;
     } else if (0==strcmp(name, "string")) {
@@ -84,10 +82,8 @@ get_automatic_type(struct Program *program, const char *name) {
         result = TYPE_STRING;
     } else if (has_decimal) {
         result = TYPE_F64;
-    } else if (is_signed) {
-        result = TYPE_S64;
     } else {
-        result = TYPE_U64;
+        result = TYPE_S64;
     }
     
     return result;
@@ -110,7 +106,7 @@ type_size_notstr(enum Type type) {
             result = 8;
             break;
         }
-        case TYPE_U64: case TYPE_S64: {
+        case TYPE_S64: {
             result = 64;
             break;
         }
@@ -142,7 +138,7 @@ type_size(struct Variable *v) {
             result = 8;
             break;
         }
-        case TYPE_U64: case TYPE_S64: {
+        case TYPE_S64: {
             result = 64;
             break;
         }
@@ -177,11 +173,6 @@ print(struct Variable *v) {
         
         case TYPE_S64: {
             printf("%zd\n", *(s64*)ptr);
-            break;
-        }
-        
-        case TYPE_U64: {
-            printf("%zu\n", *(u64*)ptr);
             break;
         }
         
@@ -223,7 +214,7 @@ program_setup_syscalls(struct Program *program) {
     function_setup_scope(fun);
     strcpy(fun->name, "print");
     fun->sys_function = SYSCALL_PRINT;
-    program_add_variable(program, fun->top_scope, "_print_var", TYPE_U64, 64);
+    program_add_variable(program, fun->top_scope, "_print_var", TYPE_S64, 64);
     ++program->function_count;
 }
 
@@ -322,11 +313,11 @@ set_variable_from_str(void *ptr, char *str, enum Type type) {
             memcpy(ptr, &valueu8, type_size_notstr(type));
             break;
         }
-        case TYPE_U64: {
-            u64 valueu64 = (u64) atoi(str);
-            memcpy(ptr, &valueu64, type_size_notstr(type));
-            break;
-        }
+        // case TYPE_U64: {
+            // u64 valueu64 = (u64) atoi(str);
+            // memcpy(ptr, &valueu64, type_size_notstr(type));
+            // break;
+        // }
         case TYPE_S64: {
             s64 values64 = (s64) atoi(str);
             memcpy(ptr, &values64, type_size_notstr(type));
