@@ -23,8 +23,16 @@ token_new(struct Tokenizer *tokenizer,
 bool
 is_special_char(char c) {
     switch (c) {
-        case TOKEN_COLON: case TOKEN_EQUAL: case TOKEN_ADD:
-        case TOKEN_SUBTRACT: case TOKEN_END_STATEMENT:
+        case TOKEN_COLON: case TOKEN_EQUAL: 
+        case TOKEN_ADD: case TOKEN_SUBTRACT: 
+        case TOKEN_MULTIPLY: case TOKEN_DIVIDE:
+        
+#if TOKEN_MULTIPLY != TOKEN_POINTER
+        case TOKEN_POINTER: 
+#endif
+        case TOKEN_ADDRESS:
+        
+        case TOKEN_END_STATEMENT:
         case TOKEN_OPEN_FUNCTION: case TOKEN_CLOSE_FUNCTION:
         case TOKEN_OPEN_SCOPE: case TOKEN_CLOSE_SCOPE:
         case TOKEN_COMMA: case '"':
@@ -50,7 +58,7 @@ is_valid_identifier_char(bool first, char c) {
 
 bool
 is_literal_char(char c) {
-    return c >= '0' && c <= '9';
+    return (c >= '0' && c <= '9') || c == '.';
 }
 
 bool
@@ -230,7 +238,7 @@ tokenize(const char *file_name, char *source_buffer) {
 void
 print_tokens(struct Tokenizer *tokenizer) {
     struct Token *start = tokenizer->token_start;
-    printf("Token Count: %u\n", tokenizer->token_count);
+    Log("Token Count: %u\n", tokenizer->token_count);
 
     for (struct Token *tok = start; tok; tok = tok->next) {
         enum Token_Type type = tok->type;
@@ -269,6 +277,6 @@ print_tokens(struct Tokenizer *tokenizer) {
             sprintf(identifier_type, " | Identifier Type: %s", str);
         }
 
-        printf("Token: %s \"%s\"%s\n", name, tok->name, identifier_type);
+        Log("Token: %s \"%s\"%s\n", name, tok->name, identifier_type);
     }
 }

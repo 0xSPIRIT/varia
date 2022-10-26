@@ -1,5 +1,5 @@
 @echo off
 pushd bin\
-varia test.v
+varia test.c
 popd
 exit %errorlevel%

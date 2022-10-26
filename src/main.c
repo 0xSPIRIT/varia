@@ -18,7 +18,7 @@ main(int argc, char **argv) {
     if (argc == 1) {
         // Error("Sorry! You must call the interpreter with the file name of your source code!\n");
         // return 1;
-        argv[1] = "test.v";
+        argv[1] = "test.c";
     }
     
     char *source_buffer = read_entire_file(argv[1]);

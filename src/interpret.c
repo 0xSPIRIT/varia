@@ -41,6 +41,57 @@ get_type(const char *name) {
     return result;
 }
 
+// For example,
+// converting the \n to an actual newline instead of backslash and n.
+void
+parse_string(char *output_string, char *input_string) {
+    char *s = input_string;
+    u64 length = strlen(s);
+    u64 output_len = 0;
+    
+    for (u64 i = 0; i < length; i++) {
+        if (s[i] == '\\') {
+            i++;
+            switch (s[i]) {
+                case 'n': {
+                    output_string[output_len++] = '\n';
+                    break;
+                }
+                case 'r': {
+                    output_string[output_len++] = '\r';
+                    break;
+                }
+                case 't': {
+                    output_string[output_len++] = '\t';
+                    break;
+                }
+                case '\\': {
+                    output_string[output_len++] = '\\';
+                    break;
+                }
+            }
+        } else {
+            output_string[output_len++] = s[i];
+        }
+    }
+}
+
+enum Type
+get_automatic_type_literal(const char *name) {
+    if (*name == '"') {
+        return TYPE_STRING;
+    }
+    
+    for (unsigned i = 0; i < strlen(name); i++) {
+        char c = name[i];
+        if (c == '.') {
+            return TYPE_F64;
+        }
+    }
+    
+    return TYPE_S64;
+}
+
 enum Type
 get_automatic_type(struct Program *program, const char *name) {
     enum Type result = 0;
@@ -54,7 +105,6 @@ get_automatic_type(struct Program *program, const char *name) {
     bool is_number = true;
     bool has_decimal = false;
     bool is_identifier = false;
-    bool is_string = false;
     
     if (name[0] == '-') {
         is_signed = true;
@@ -62,10 +112,8 @@ get_automatic_type(struct Program *program, const char *name) {
     
     for (unsigned i = 0; i < strlen(name); i++) {
         char c = name[i];
-        if (c == ' ') {
+        if (c == ' ' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
             is_identifier = true;
-        } else if (!is_identifier && (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
-            is_string = true;
         } else if (c == '.') {
             has_decimal = true;
         } else if (!(c >= '0' && c <= '9')) {
@@ -78,9 +126,7 @@ get_automatic_type(struct Program *program, const char *name) {
         struct Variable *v = program_find_variable(program->current_function, name);
         Assert(v);
         result = v->type;
-    } else if (is_string) {
-        result = TYPE_STRING;
-    } else if (has_decimal) {
+    }  else if (has_decimal) {
         result = TYPE_F64;
     } else {
         result = TYPE_S64;
@@ -99,6 +145,7 @@ u64
 type_size_notstr(enum Type type) {
     u64 result = 0;
     
+    Assert(type != TYPE_NONE);
     Assert(type != TYPE_STRING);
     
     switch (type) {
@@ -162,7 +209,7 @@ print(struct Variable *v) {
     
     switch (type) {
         case TYPE_STRING: {
-            printf("%s", (char*)ptr);
+            Log("%s", (char*)ptr);
             break;
         }
         
@@ -172,12 +219,12 @@ print(struct Variable *v) {
         }
         
         case TYPE_S64: {
-            printf("%zd\n", *(s64*)ptr);
+            Log("%zd\n", *(s64*)ptr);
             break;
         }
         
         case TYPE_F64: {
-            printf("%lf\n", *(f64*)ptr);
+            Log("%lf\n", *(f64*)ptr);
             break;
         }
     }
@@ -197,25 +244,39 @@ program_add_variable(struct Program *program,
                      struct Scope *scope,
                      const char *name,
                      enum Type type,
+                     bool is_pointer,
                      u64 size)
 {
     struct Variable *var = &scope->variables[scope->var_count++];
-    
     strcpy(var->name, name);
+    var->is_pointer = is_pointer;
     var->type = type;
-    var->pointer = false;
-    var->value = program_alloc(program, size);
+    if (is_pointer) {
+        var->value = program_alloc(program, sizeof(u64));
+        // All pointers are u64.
+    } else {
+        var->value = program_alloc(program, size);
+    }
     return var;
 }
 
 void
 program_setup_syscalls(struct Program *program) {
-    struct Function *fun = &program->functions[program->function_count];
-    function_setup_scope(fun);
-    strcpy(fun->name, "print");
-    fun->sys_function = SYSCALL_PRINT;
-    program_add_variable(program, fun->top_scope, "_print_var", TYPE_S64, 64);
-    ++program->function_count;
+    {
+        struct Function *fun = &program->functions[program->function_count];
+        function_setup_scope(fun);
+        strcpy(fun->name, "print");
+        fun->sys_function = SYSCALL_PRINT;
+        program_add_variable(program,
+                             fun->top_scope,
+                             "_print_var",
+                             TYPE_S64,
+                             false,
+                             64);
+        fun->parameter_count = 1;
+        
+        ++program->function_count;
+    }
 }
 
 void
@@ -240,6 +301,7 @@ program_setup(struct Interpreter *interp) {
 void
 program_free(struct Interpreter *interp) {
     VirtualFree(interp->program.memory, 0, MEM_RELEASE);
+    // TODO: Free all scopes, and everything else we may have allocated.
 }
 
 void
@@ -273,11 +335,14 @@ program_add_function(struct Program *program, struct Token *tok) {
                                  fun->top_scope,
                                  tok->name,
                                  type,
+                                 false,
                                  type_size_notstr(type));
             
             tok = type_token->next;
             if (tok->type == TOKEN_COMMA)
                 tok = tok->next;
+            
+            fun->parameter_count++;
         }
     } else {
         // We don't have any parameters.
@@ -297,14 +362,17 @@ copy_variable(struct Variable *dest, struct Variable *src) {
 }
 
 void
-set_variable_from_str(void *ptr, char *str, enum Type type) {
+get_variable_from_str(void *ptr, char *str, enum Type type) {
+    Assert(ptr);
+    Assert(str);
+    
     switch (type) {
         case TYPE_STRING: {
             // Remove surrounding ""
             str++;
             str[strlen(str)-1] = 0;
             
-            strcpy((char*)ptr, str);
+            parse_string((char*)ptr, str);
             break;
         }
         
@@ -313,14 +381,138 @@ set_variable_from_str(void *ptr, char *str, enum Type type) {
             memcpy(ptr, &valueu8, type_size_notstr(type));
             break;
         }
-        // case TYPE_U64: {
-            // u64 valueu64 = (u64) atoi(str);
-            // memcpy(ptr, &valueu64, type_size_notstr(type));
-            // break;
-        // }
+        case TYPE_F64: {
+            f64 valuesf64 = (f64) atof(str);
+            memcpy(ptr, &valuesf64, type_size_notstr(type));
+            break;
+        }
         case TYPE_S64: {
             s64 values64 = (s64) atoi(str);
             memcpy(ptr, &values64, type_size_notstr(type));
+            break;
+        }
+    }
+}
+
+void
+get_variable_from_literal_or_identifier(struct Interpreter *interp, void *ptr, struct Token *token) {
+    if (token->type == TOKEN_LITERAL) {
+        enum Type type = get_automatic_type(&interp->program, token->name);
+        
+        get_variable_from_str(ptr, token->name, type);
+        //Log("New out_variable %s = %s\n", out_var->name, a->name);
+    } else if (token->type == TOKEN_IDENTIFIER) {
+        // Copy the out_variable.
+        struct Variable *var_set_to = program_find_variable(interp->program.current_function, token->name);
+        
+        Assert(var_set_to);
+        
+        if (var_set_to->type == TYPE_STRING) {
+            strcpy((char*)ptr, (char*)var_set_to->value);
+        } else {
+            memcpy(ptr, var_set_to->value, type_size(var_set_to));
+        }
+    }
+}
+
+void
+make_sure_tokens_are_same_type(struct Interpreter *interp, struct Token *a, struct Token *b) {
+    enum Type a_type = get_automatic_type(&interp->program, a->name);
+    enum Type b_type = get_automatic_type(&interp->program, b->name);
+    
+    if (a_type != b_type) {
+        CompileError(interp, a, "Expression must have the same type for both operands.");
+    }
+}
+
+// expr - Pointer to the start of the expression
+// token_count - How many tokens do the expression take?
+void
+evaluate_expression(struct Interpreter *interp,
+                    enum Type output_type,
+                    struct Token *expr,
+                    int token_count,
+                    struct Variable *output_var)
+{
+    // tok_1 operation tok_2 <- This is the only valid expression here.
+    Assert(token_count == 3);
+    
+    Assert(output_var);
+    
+    if (output_type == 0) {
+        Assert(output_var->type == 0); // Must not be set yet.
+        Assert(output_var->value == NULL); // Must not be allocated as yet.
+    }
+    
+    struct Token *a = expr;
+    struct Token *operation = a->next;
+    struct Token *b = operation->next;
+    
+    make_sure_tokens_are_same_type(interp, a, b);
+    
+    if (output_type == 0) {
+        output_type = get_automatic_type(&interp->program, a->name);
+    } else if (output_type != get_automatic_type(&interp->program, a->name)) {
+        CompileError(interp, a, "Type of variable is not equal to the expression return type");
+    }
+    
+    output_var->type = output_type;
+    
+    if (!output_var->value) {
+        u64 size = type_size_notstr(output_var->type);
+        output_var->value = program_alloc(&interp->program, size);
+    }
+    
+    s64 a_s64 = 0, b_s64 = 0;
+    f64 a_f64 = 0, b_f64 = 0;
+    
+    if (output_type == TYPE_S64) {
+        get_variable_from_literal_or_identifier(interp, &a_s64, a);
+        get_variable_from_literal_or_identifier(interp, &b_s64, b);
+    } else if (output_type == TYPE_F64) {
+        get_variable_from_literal_or_identifier(interp, &a_f64, a);
+        get_variable_from_literal_or_identifier(interp, &b_f64, b);
+    }
+    
+    switch (operation->type) {
+        case TOKEN_ADD: {
+            if (output_type == TYPE_S64) {
+                s64 result = a_s64 + b_s64;
+                *(s64*)output_var->value = result;
+            } else if (output_type == TYPE_F64) {
+                f64 result = a_f64 + b_f64;
+                *(f64*)output_var->value = result;
+            }
+            break;
+        }
+        case TOKEN_SUBTRACT: {
+            if (output_type == TYPE_S64) {
+                s64 result = a_s64 - b_s64;
+                *(s64*)output_var->value = result;
+            } else if (output_type == TYPE_F64) {
+                f64 result = a_f64 - b_f64;
+                *(f64*)output_var->value = result;
+            }
+            break;
+        }
+        case TOKEN_DIVIDE: {
+            if (output_type == TYPE_S64) {
+                s64 result = a_s64 / b_s64;
+                *(s64*)output_var->value = result;
+            } else if (output_type == TYPE_F64) {
+                f64 result = a_f64 / b_f64;
+                *(f64*)output_var->value = result;
+            }
+            break;
+        }
+        case TOKEN_MULTIPLY: {
+            if (output_type == TYPE_S64) {
+                s64 result = a_s64 * b_s64;
+                *(s64*)output_var->value = result;
+            } else if (output_type == TYPE_F64) {
+                f64 result = a_f64 * b_f64;
+                *(f64*)output_var->value = result;
+            }
             break;
         }
     }
@@ -333,13 +525,26 @@ handle_variable(struct Interpreter *interp, struct Token **tok) {
     struct Function *current_function = interp->program.current_function;
     
     if ((*tok)->next->type == TOKEN_COLON) {
-        // @Cleanup This seems dirty.
-        struct Token *tok_colon = (*tok)->next;
-        struct Token *tok_type = tok_colon->next;
-        struct Token *tok_equals = tok_type->next;
-        struct Token *tok_literal = tok_equals->next;
+        bool is_pointer = (*tok)->next->next->type == TOKEN_POINTER;
+        
+        struct Token *tok_colon, *tok_ptr, *tok_type, *tok_equals, *tok_literal;
+        
+        tok_colon = (*tok)->next;
+        if (is_pointer) {
+            tok_ptr = tok_colon->next;
+            tok_type = tok_ptr->next;
+        } else {
+            tok_type = tok_colon->next;
+        }
+        
+        tok_equals = tok_type->next;
+        tok_literal = tok_equals->next;
         
         bool is_automatic = false;
+        
+        if (is_automatic && tok_equals->next->type == TOKEN_ADDRESS) {
+            CompileError(interp, *tok, "Must declare specifically the type of a pointer.");
+        }
         
         if (tok_colon->type == TOKEN_COLON && tok_colon->next->type == TOKEN_EQUAL) {
             is_automatic = true;
@@ -349,41 +554,60 @@ handle_variable(struct Interpreter *interp, struct Token **tok) {
         }
         
         // We're doing a variable declaration
-        enum Type type;
+        enum Type type = 0;
+        
+        // Is the part after the equals sign an expression?
+        bool is_expression = tok_literal->next->type != TOKEN_END_STATEMENT;
         
         if (!is_automatic) {
             type = get_type(tok_type->name);
         } else {
-            type = get_automatic_type(&interp->program, tok_literal->name);
+            // We can't figure out the type if it's an expression.
+            if (!is_expression) {
+                type = get_automatic_type(&interp->program, tok_literal->name);
+            }
         }
         
         u64 size = 0;
-        if (type == TYPE_STRING && tok_equals->type == TOKEN_EQUAL) {
+        if (type == TYPE_NONE) {
+            // ...
+        } else if (type == TYPE_STRING && tok_equals->type == TOKEN_EQUAL) {
             size = strlen(tok_literal->name) - 2 + 1; // -2 for the surrounding "" and +1 for the null terminator.
         } else if (type == TYPE_STRING) {
-            Error("Must initialize a string to something at %s(%d)\n", interp->tokenizer.file_name, (*tok)->line);
-            exit(1);
+            CompileError(interp, *tok, "Must initialize a string to something.");
         } else {
             size = type_size_notstr(type);
         }
         
-        struct Variable *var = program_add_variable(&interp->program, current_function->current_scope, (*tok)->name, type, size);
         *tok = tok_equals;
         
         // We're initializing as well.
         if ((*tok)->type == TOKEN_EQUAL) {
-            *tok = tok_literal;
-            
-            // Get the value from the literal.
-            if (tok_literal->type == TOKEN_LITERAL) {
-                set_variable_from_str(var->value, tok_literal->name, type);
-                //printf("New variable %s = %s\n", var->name, tok_literal->name);
-            } else if (tok_literal->type == TOKEN_IDENTIFIER) {
-                // Copy the variable.
-                struct Variable *var_set_to = program_find_variable(current_function, tok_literal->name);
-                copy_variable(var, var_set_to);
-                //printf("Set value for %s to the value of %s: ", var->name, tok_literal->name);
-                //print(var);
+            if (is_expression) {
+                // program_add_variable won't work for us here because
+                // we don't know the type yet.
+                struct Scope *scope = current_function->current_scope;
+                struct Variable *var = &scope->variables[scope->var_count++];
+                var->is_pointer = is_pointer;
+                strcpy(var->name, tok_variable_name->name);
+                evaluate_expression(interp, type, tok_literal, 3, var);
+            } else {
+                struct Variable *var = program_add_variable(&interp->program,
+                                                            current_function->current_scope,
+                                                            tok_variable_name->name,
+                                                            type,
+                                                            is_pointer,
+                                                            size);
+                                
+                // Get the value from the literal.
+                if (tok_literal->type == TOKEN_LITERAL) {
+                    get_variable_from_str(var->value, tok_literal->name, type);
+                    //Log("New variable %s = %s\n", var->name, tok_literal->name);
+                } else if (tok_literal->type == TOKEN_IDENTIFIER) {
+                    // Copy the variable.
+                    struct Variable *var_set_to = program_find_variable(current_function, tok_literal->name);
+                    copy_variable(var, var_set_to);
+                }
             }
         }
         
@@ -393,11 +617,21 @@ handle_variable(struct Interpreter *interp, struct Token **tok) {
         struct Token *tok_equals = tok_variable_name->next;
         struct Token *tok_literal = tok_equals->next;
         
-        struct Variable *v = program_find_variable(current_function, tok_variable_name->name);
-        Assert(v); // If v==NULL, that variable hasn't been declared in this scope.
+        struct Variable *v = program_find_variable(current_function,
+                                                   tok_variable_name->name);
+        if (!v) {
+            CompileError1(interp, tok_variable_name,
+                          "%s is not defined", tok_variable_name->name);
+        }
+        Assert(v); // Make sure it's declared.
         
-        set_variable_from_str(v->value, tok_literal->name, v->type);
-        //printf("New value for %s: %d\n", (*tok)->name, *(int*)v->value);
+        bool is_expression = tok_literal->next->type != TOKEN_END_STATEMENT;
+        
+        if (is_expression) {
+            evaluate_expression(interp, v->type, tok_literal, 3, v);
+        } else {
+            get_variable_from_str(v->value, tok_literal->name, v->type);
+        }
     }
 }
 
@@ -452,6 +686,8 @@ interpret(struct Tokenizer tokenizer) {
                 case IDENTIFIER_FUNCTION_CALL: {
                     struct Function *func = program_find_function(&interp.program, tok->name);
                     
+                    struct Token *function_start_token = tok;
+                    
                     tok = tok->next->next;
                     
                     int i = 0;
@@ -474,13 +710,16 @@ interpret(struct Tokenizer tokenizer) {
                             v = program_find_variable(interp.program.current_function, param_tok->name);
                             
                             if (!v) {
-                                Error("%s was not defined at %s(%d)\n", param_tok->name, interp.tokenizer.file_name, param_tok->line);
-                                exit(1);
+                                CompileError1(&interp, param_tok, "%s was not defined", param_tok->name);
                             }
                             
                             // Special case for Print: make the variable
                             // type dynamically the same as the input.
                             if (func->sys_function == SYSCALL_PRINT) {
+                                // Print doesn't take more than one parameter.
+                                if (i > 0) {
+                                    CompileError(&interp, param_tok, "print() only takes one parameter");
+                                }
                                 param->type = v->type;
                             }
                             
@@ -497,8 +736,8 @@ interpret(struct Tokenizer tokenizer) {
                                 param->type = get_automatic_type(&interp.program, param_tok->name);
                             }
                             
-                            set_variable_from_str(param->value, param_tok->name, param->type);
-                            //printf("Set value for parameter to %s\n", param_tok->name);
+                            get_variable_from_str(param->value, param_tok->name, param->type);
+                            //Log("Set value for parameter to %s\n", param_tok->name);
                         } else {
                             Assert(0);
                         }
@@ -509,6 +748,12 @@ interpret(struct Tokenizer tokenizer) {
                         }
                         
                         i++;
+                    }
+                    
+                    if (i != func->parameter_count) {
+                        // char outstr[128] = {0};
+                        // sprintf(outstr, "Function %s takes %d arguments, not %d!\n", func->name, func->parameter_count, i);
+                        CompileError1(&interp, function_start_token, "Function %s does not take that amount of arguments!", func->name);
                     }
                     
                     if (func) {

@@ -5,11 +5,19 @@ enum Token_Type {
     
     TOKEN_IDENTIFIER,
     TOKEN_LITERAL,
-
+    
     TOKEN_COLON = ':',
+    
     TOKEN_EQUAL = '=',
+    
     TOKEN_ADD = '+',
     TOKEN_SUBTRACT = '-',
+    TOKEN_DIVIDE = '/',
+    TOKEN_MULTIPLY = '*',
+    
+    TOKEN_POINTER = '*',
+    TOKEN_ADDRESS = '&',
+    
     TOKEN_END_STATEMENT = ';',
     TOKEN_OPEN_FUNCTION = '(',
     TOKEN_COMMA = ',',

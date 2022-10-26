@@ -16,9 +16,21 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
-#define Error(...) (fprintf(stderr, __VA_ARGS__))
+#define Log(...) (printf(__VA_ARGS__), fflush(stdout))
+#define Error(...) fprintf(stderr, __VA_ARGS__)
 #define Assert(cond) if (!(cond)) {Error("Assertion failed at %s(%d)!\n", __FILE__, __LINE__), __debugbreak();}
-#define Panic() (Error("Panic at %s(%d)!\n", __FILE__, __LINE__), exit(1))
+#define Panic() Error("Panic at %s(%d)!\n", __FILE__, __LINE__), exit(1)
+#define CompileError(interp, token, message) \
+    (Error("Error: %s(%d)\n  " message "\n", \
+           (interp)->tokenizer.file_name,    \
+           (token)->line),                   \
+           exit(1))
+#define CompileError1(interp, token, message, param1) \
+    (Error("Error: %s(%d)\n  " message "\n", \
+           (interp)->tokenizer.file_name,    \
+           (token)->line,                    \
+           param1),                          \
+           exit(1))
 
 char *
 read_entire_file(const char *file) {

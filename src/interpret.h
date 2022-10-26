@@ -3,6 +3,7 @@
 #define MAX_FUNCTION_PAREMETERS 8
 
 enum Type {
+    TYPE_NONE,
     TYPE_U8,
     TYPE_S64,
     TYPE_F64,
@@ -17,8 +18,8 @@ enum SysCall {
 struct Variable {
     char name[64];
     enum Type type;
-    bool pointer; // Are we a pointer?
-    void *value; // Pointer into program.memory
+    bool is_pointer;
+    void *value; // Pointer into program.memory. If the variable is a pointer, this becomes a u64.
 };
 
 struct Scope {
